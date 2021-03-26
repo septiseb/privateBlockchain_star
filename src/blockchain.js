@@ -63,23 +63,28 @@ class Blockchain {
   _addBlock(block) {
     let self = this;
     return new Promise(async (resolve, reject) => {
+      const validation = await self.validateChain();
       let BlockObj = block;
-      let height = await self.getChainHeight();
-      BlockObj.time = new Date().getTime().toString().slice(0, -3);
-      if (height >= 0) {
+
+      if (validation.length === 0) {
+        let height = await self.getChainHeight();
+        BlockObj.time = new Date().getTime().toString().slice(0, -3);
         BlockObj.height = height + 1;
-        let previousBlock = self.chain[self.height];
-        BlockObj.previousBlockHash = previousBlock.hash;
-        BlockObj.hash = SHA256(JSON.stringify(BlockObj)).toString();
-        self.chain.push(BlockObj);
-        self.height = self.chain.length - 1;
-        resolve(BlockObj);
+        if (height >= 0) {
+          let previousBlock = self.chain[self.height];
+          BlockObj.previousBlockHash = previousBlock.hash;
+          BlockObj.hash = SHA256(JSON.stringify(BlockObj)).toString();
+          self.chain.push(BlockObj);
+          self.height = self.chain.length - 1;
+          resolve(BlockObj);
+        } else {
+          BlockObj.hash = SHA256(JSON.stringify(BlockObj)).toString();
+          self.chain.push(BlockObj);
+          self.height = self.chain.length - 1;
+          resolve(BlockObj);
+        }
       } else {
-        BlockObj.height = height + 1;
-        BlockObj.hash = SHA256(JSON.stringify(BlockObj)).toString();
-        self.chain.push(BlockObj);
-        self.height = self.chain.length - 1;
-        resolve(BlockObj);
+        reject("The blockChain is corrupted");
       }
     });
   }
@@ -128,8 +133,12 @@ class Blockchain {
       if (messageTime - currentTime < 300) {
         if (bitcoinMessage.verify(message, address, signature)) {
           let block = new BlockClass.Block({ star: star, owner: address });
-          await self._addBlock(block);
-          resolve(block);
+          try {
+            await self._addBlock(block);
+            resolve(block);
+          } catch (e) {
+            reject(e);
+          }
         } else {
           reject("It could not be added");
         }
